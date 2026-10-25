@@ -1,0 +1,34 @@
+# 换行与编码策略
+#
+# 这个仓库里有两类文件对换行/编码非常敏感：
+#   - run_all.ps1 必须是 UTF-8 with BOM + CRLF，否则 PowerShell 5.1 把中文显示成乱码
+#   - run_all.bat 必须是 CRLF，否则 cmd.exe 解析多行 if 块会出错
+#
+* text=auto
+
+# Windows 启动器
+#
+# run_all.bat 标记为 -text（不做任何换行转换），让 blob 里精确保存 CRLF。
+# 原因：GitHub 的 "Download ZIP" 是直接打包 blob、不应用 eol 规则。
+# 如果 blob 里存的是 LF，用户下载 ZIP 得到的 .bat 就是 LF，cmd.exe 解析
+# 多行 if 块时会出错。用 -text 可以同时保证 clone 和 ZIP 都是 CRLF。
+#
+# run_all.ps1 仍用 text eol=crlf：PowerShell 对 LF 换行是容忍的，
+# 而 BOM 属于文件内容的一部分，无论如何都会保留在 blob 里。
+*.bat -text
+*.ps1 text eol=crlf
+
+# 跨平台脚本与文档
+*.sh    text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+
+# 二进制
+*.zip binary
+*.npz binary
+
+# 说明：git 不会剥除 BOM（它属于文件内容的一部分），上面的规则只处理换行。
+# 但如果你用某些编辑器编辑 run_all.ps1 后保存，BOM 可能被去掉。
+# 改动该文件后请确认首字节仍然是 EF BB BF，否则 Windows 端会出现中文乱码。

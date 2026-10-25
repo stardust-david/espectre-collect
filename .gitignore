@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 采集日志（运行 collect_batch.py 时生成）
+logs/
+
+# 本地虚拟环境（绝不应提交，跨平台也不通用）
+.venv/
+venv/
+
+# 打包产物
+*.zip
+
+# macOS
+.DS_Store

@@ -8,10 +8,11 @@
 macOS / Linux / Windows 用的是同一个文件；平台差异只体现在启动器上。
 
 ```
-collect_batch.py    跨平台核心：自检、批量采集、元数据回填、质量校验
-run_all.sh          macOS / Linux 一键入口
-run_all.ps1         Windows 一键入口（PowerShell 主体）
-run_all.bat         Windows 双击入口（调用 run_all.ps1）
+collect_batch.py     跨平台核心：自检、批量采集、元数据回填、质量校验
+presence_baseline.py 存在检测可行性基线实验（empty vs static_presence）
+run_all.sh           macOS / Linux 一键入口
+run_all.ps1          Windows 一键入口（PowerShell 主体）
+run_all.bat          Windows 双击入口（调用 run_all.ps1）
 ```
 
 | 平台 | 推荐入口 | 也可以直接调用 |
@@ -287,6 +288,68 @@ recall > 90%、误报率 < 10%，并且需要 `selection` / `holdout` 角色的
 复查无误后，可以：
 - 手工改 `data/dataset_info.json` 里对应条目的 `dataset_role`，或
 - 用 `--role train` 重跑（会影响本次新增的录音）
+
+## 第 0 步：存在检测可行性基线
+
+`presence_baseline.py` 是一个**前置验证实验**，用来回答一个关键问题：
+
+> 「屋里没人」和「有人但坐着不动」，在 CSI 上到底分不分得开？
+
+如果这一对分不开，换任何模型都没用，必须先改采集方式。如果分得开，才值得投入做
+更复杂的特征和模型。这个脚本只用手工特征 + 传统分类器，几十秒跑完，不消耗训练时间。
+
+### 安装依赖
+
+```bash
+python -m pip install numpy scikit-learn
+```
+
+### 用法
+
+```bash
+# 先看有哪些数据
+python presence_baseline.py --data data --list
+
+# 跑 empty vs static_presence 基线
+python presence_baseline.py --data data
+
+# 静态检测建议用更长的窗口（约 10 秒 @ 100 pps）
+python presence_baseline.py --data data --window 1000 --stride 250
+```
+
+Windows 上指定解释器路径即可：
+
+```powershell
+.venv\Scripts\python.exe presence_baseline.py --data C:\espectre\data
+```
+
+### 怎么读结果
+
+脚本用**留一录音交叉验证**（按录音划分，不按窗口），输出 AUC 和混淆矩阵：
+
+| AUC | 含义 | 下一步 |
+|---|---|---|
+| ≥ 0.80 | 信号里有可用信息 | 加入呼吸频段能量、相位特征，再换更强的模型 |
+| 0.60 – 0.80 | 边缘可用 | **先改采集**：加长窗口、固定位置、重新交替采集 |
+| < 0.60 | 基本不可分 | 换模型没用，必须改采集或硬件 |
+
+同时会输出每条录音的平均预测概率，能直接看出哪一条被误判 —— 定位问题
+（某个时段、某次采集异常）时比汇总指标有用得多。
+
+### 为什么必须按录音划分
+
+同一段录密切成多个窗口后，相邻窗口几乎一样。若按窗口随机划分训练/测试，
+测试窗口和训练窗口高度相关，AUC 会虚高到 0.99，换场景立刻崩。
+脚本强制用 `LeaveOneGroupOut` 按录音分组，就是为了避免这个陷阱。
+
+### 输出文件
+
+```
+results/
+    predictions_LogisticRegression.csv
+    predictions_RandomForest.csv
+    features.csv
+```
 
 ## 采集完成后
 
